@@ -1,0 +1,65 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+#Packages
+```{r}
+library(tidyverse)
+library(psych)
+library(lm.beta)
+library(openintro)
+```
+
+
+```{r}
+fastfood <- openintro::fastfood
+fastfood
+```
+
+#Q1
+```{r}
+small <- fastfood %>% 
+  filter(restaurant == 'Sonic' | restaurant == 'Subway' | restaurant == 'Taco Bell') %>% 
+  select(calories, total_fat, sugar, calcium) %>% 
+  na.omit()
+Q1 <- round(cor(small), 2)
+Q1
+```
+
+#Q2
+```{r}
+reg <- fastfood %>% 
+  filter(restaurant == 'Mcdonalds' | restaurant == 'Subway') %>% 
+  mutate(reg = if_else(restaurant == 'Mcdonalds', 1, 0))
+model <- glm(reg~ calories + sodium + protein, binomial(), reg)
+Q2 <- round(summary(model)$coefficients[1:4,1], 2)
+Q2
+```
+
+#Q3
+```{r}
+model2 <- glm(reg~ calories + protein, binomial(), reg)
+Q3 <- AIC(model, k = 2)
+```
+
+#Q4
+```{r}
+model3 <- lm(calories ~ sat_fat + fiber + sugar, data = fastfood)
+Q4 <- round(summary(model3)$coefficients[1:2,1],2)
+Q4 <- Q4[2]
+Q4
+```
+
+#Q5
+```{r}
+Quickcount <- fastfood %>% 
+  group_by(restaurant) %>% 
+  count() %>% 
+  filter(n >= 50 & n <= 60)
+Quickcount
+df <- fastfood %>% 
+  filter(restaurant == 'Arbys'| restaurant == 'Mcdonalds'| restaurant == 'Sonic')
+model4 <- lm(total_fat ~ cholesterol + total_carb + vit_a + restaurant, data = df)
+model5 <- lm(total_fat ~ cholesterol + total_carb + vit_a, data = df)
+Q5 <-round(lm.beta(model5)$standardized.coefficients[2],2)
+```
