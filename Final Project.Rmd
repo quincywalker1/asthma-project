@@ -1,0 +1,246 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+#Packages
+```{r}
+library(tidyverse)
+library(psych)
+library(lm.beta)
+```
+
+#File(s)
+```{r}
+df <- read_csv("BRFSS2015.csv")
+names(df) <- gsub("_","x", names(df))
+```
+
+#Q1
+```{r}
+Q1 <- df %>%
+  filter(HLTHPLN1 == 1) %>% 
+  count() %>% 
+  transmute("Has health coverage" = n)
+```
+
+#Q2
+```{r}
+PA <- df %>% 
+  filter(xSTATE == 42) %>% 
+  mutate(MENTHLTH = replace(MENTHLTH, MENTHLTH == 88,0)) %>% 
+  filter(MENTHLTH <= 30)
+Q2 <- round(mean(PA$MENTHLTH),2)
+```
+
+#Q3
+```{r}
+Q3 <- df %>% 
+  filter(HAVARTH3 == 1 | HAVARTH3 == 2) %>% 
+  select(HAVARTH3, WTKG3) %>% 
+  filter(WTKG3 != 9999) %>% 
+  mutate(WTKG3 = replace(WTKG3, WTKG3 > 0 , (WTKG3/100) * 2.20462)) %>% 
+  group_by(HAVARTH3) %>% 
+  summarise('mean_weight' = mean(WTKG3), 'sd_weight' = sd(WTKG3)) %>% 
+  round(2) %>% 
+  select('mean_weight', 'sd_weight')
+```
+
+#Q4
+```{r}
+minutepup <- quantile(df$PA1MINx, 0.997, na.rm = TRUE)
+minutelow <- quantile(df$PA1MINx,0.003, na.rm = TRUE)
+minuteout <- which(df$PA1MINx > minutepup | df$PA1MINx < minutelow)
+df2 <- df[-minuteout,]
+Q4 <- nrow(df2)/nrow(df)*100
+```
+
+#Q5
+```{r}
+Q5 <- df2 %>% 
+  filter(MARITAL != 9) %>% 
+  select(MARITAL, PA1MINx) %>% 
+  group_by(MARITAL) %>% 
+  na.omit() %>%
+  mutate(MARITAL = replace(MARITAL, MARITAL == 1, 'Married'),
+         MARITAL = replace(MARITAL, MARITAL == 2, 'Divorced'),
+         MARITAL = replace(MARITAL, MARITAL == 3, 'Widowed'),
+         MARITAL = replace(MARITAL, MARITAL == 4, 'Separated'),
+         MARITAL = replace(MARITAL, MARITAL == 5, 'Never Married'),
+         MARITAL = replace(MARITAL, MARITAL == 6, 'A member of an unmarried couple'),
+         MARITAL = replace(MARITAL, MARITAL == 7, 'Married')) %>% 
+  summarise('Mean' = mean(PA1MINx), 'SD' = sd(PA1MINx), 'Min' = min(PA1MINx), 'Max' = max(PA1MINx))
+```
+
+#Q6
+```{r}
+p1 <- df2 %>% 
+  filter(MARITAL != 9) %>% 
+  select(MARITAL, PA1MINx) %>% 
+  group_by(MARITAL) %>% 
+  na.omit() %>%
+  mutate(MARITAL = replace(MARITAL, MARITAL == 1, 'Married'),
+         MARITAL = replace(MARITAL, MARITAL == 2, 'Divorced'),
+         MARITAL = replace(MARITAL, MARITAL == 3, 'Widowed'),
+         MARITAL = replace(MARITAL, MARITAL == 4, 'Separated'),
+         MARITAL = replace(MARITAL, MARITAL == 5, 'Never Married'),
+         MARITAL = replace(MARITAL, MARITAL == 6, 'A member of an unmarried couple'))
+Q6 <- ggplot(data = p1, aes(x = PA1MINx, colour = MARITAL)) + geom_boxplot() + facet_wrap(~MARITAL)
+```
+
+#Q7
+```{r}
+Q7 <- lm(PA1MINx ~ MARITAL, data = p1)
+summary(Q7)
+```
+
+#Q8
+```{r}
+model <- aov(p1$PA1MINx ~ p1$MARITAL, data = p1)
+Q8 <- TukeyHSD(model, conf.level=.95)
+```
+
+#Q9
+```{r}
+p2 <- df2 %>% 
+  filter(MARITAL != 9) %>% 
+  select(MARITAL, PA1MINx, FRUTDA1x) %>% 
+  filter(FRUTDA1x < 9999) %>% 
+  group_by(MARITAL) %>% 
+  na.omit() %>%
+  mutate(MARITAL = replace(MARITAL, MARITAL == 1, 'Married'),
+         MARITAL = replace(MARITAL, MARITAL == 2, 'Divorced'),
+         MARITAL = replace(MARITAL, MARITAL == 3, 'Widowed'),
+         MARITAL = replace(MARITAL, MARITAL == 4, 'Separated'),
+         MARITAL = replace(MARITAL, MARITAL == 5, 'Never Married'),
+         MARITAL = replace(MARITAL, MARITAL == 6, 'A member of an unmarried couple'),
+         FRUTDA1x = replace(FRUTDA1x, FRUTDA1x < 0, FRUTDA1x/100))
+modelx <-lm(PA1MINx ~ MARITAL, data = p1)
+modely <- lm(PA1MINx ~ MARITAL + FRUTDA1x, data = p2)
+Q9b <-AIC(modelx)
+Q9 <- AIC(modely)
+```
+
+#Q10/11
+```{r}
+#
+#ASTHNOW: Whether or not the person still had asthma. 1 = yes, 2 = no, 7 = don't know/not sure, 9 = refused.
+#SEX: The sex of the person. 1 = male, 2 = female
+#_RACE(XRACE): To identify the person's race, 1 = White only, non-Hispanic, 2 = Black only, non-Hispanic, 3 = American Indian or Alaskan Native, non-Hispanic,4 = Asian only, non-Hispanic, 5 = Native Hawaiian or other Pacific Islander only, Non-Hispanic, 6 = Other race only, non-Hispanic, 7 = Multiracial, non-Hispanic, 8 = Hispanic, 9 = Don’t know/Not sure/Refused
+#In my analysis, and variables I have chosen there are no outliers since it is all categorical, however, because of that I will remove all "don't knows" and "refused" so I can analyze a relationship between all of these variables without skewing my data with the unknown values. As a child I had a asthma but I do not now, but my sister never had asthma, and people on my old swim team who had asthma are all white, and mostly male(I am a mix of more than one race). So using my experience I want to see if I could find any correlation between those variable. Also if smoking has a relationship wit asthma.
+#Just for a quick prep I am going to select only the columns I will be using and filter all unknown values
+df3 <- df %>% 
+  select(SEX, ASTHNOW, xRACE, SMOKE100) %>% 
+  na.omit() %>% 
+  filter(ASTHNOW != 7 & ASTHNOW != 9 & xRACE != 9 & SMOKE100 != 7 & SMOKE100 != 9) %>% 
+  mutate(ASTHNOW = replace(ASTHNOW, ASTHNOW == 2,0),
+         SEX = replace(SEX,SEX ==2, 0),
+         SMOKE100 = replace(SMOKE100,SMOKE100 ==2, 0))
+df3
+```
+
+#Q12/Q13
+```{r}
+#Since the variables I am dealing with is strictly categorical I cannot find any Median, Mean or Standard Deviation for my Data set, however, I did incorporate standard error into my tibble I have created for running my each of my bar graphs.   
+asth_now <- df3 %>%
+  mutate(
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 1, 'still has asthma'),
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 0, 'does not have asthma now')
+  ) 
+
+  ggplot(data = asth_now, aes(x = ASTHNOW, fill = ASTHNOW)) +
+  geom_bar() +
+  scale_fill_manual(values=c("#9933FF",
+                             "#33FFFF"))
+#It is not uncommon to see people who had asthma at once in their life to not have it any more, but it is not rare as displayed on the graph. Since we know everyone in the data I filtered has had asthma now I want to see if there is a relationship between Sex and if they still have asthma.
+percentages_sex <- df3 %>% 
+  group_by(SEX, ASTHNOW) %>% 
+  count() %>% 
+  transmute(COUNT = n) %>% 
+  mutate(
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 1, 'Still has asthma'),
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 0, 'Does not have asthma now'),
+    SEX = replace(SEX, SEX == 1, 'Male'),
+    SEX = replace(SEX, SEX == 0, 'Female')
+  ) %>% 
+  group_by(SEX) %>% 
+  mutate(percent = COUNT/(sum(COUNT)), 
+	se = sqrt((percent * (1-percent))/COUNT)
+  ) %>% 
+  mutate(percent = round(percent*100,2),
+            se = round(se*100,2)
+  )
+
+ 
+ggplot(data =percentages_sex,aes(x = ASTHNOW, y = percent, fill = SEX)) +
+  geom_bar(position = 'dodge', stat = 'identity') +
+	geom_errorbar(aes(ymin =(percent)-(se), 
+	ymax =(percent)+(se)), 
+	width=.05, position=position_dodge(.9))
+
+#It is very interesting to see that higher percentages of woman has asthma then men. Now let's take a look at ethnicity and asthma.
+race_asth <- df3 %>% 
+  group_by(xRACE, ASTHNOW) %>% 
+  count() %>% 
+  transmute(COUNT = n) %>% 
+  mutate(xRACE = replace(xRACE, xRACE == 1 , 'White' ),
+         xRACE = replace(xRACE, xRACE == 2 , 'Black'),
+         xRACE = replace(xRACE, xRACE == 3 , 'American Indian or Alaskan Native'),
+         xRACE = replace(xRACE, xRACE == 4 , 'Asian'),
+         xRACE = replace(xRACE, xRACE == 5 , 'Native Hawaiian or other Pacific Islander'),
+         xRACE = replace(xRACE, xRACE == 6 , 'Other'),
+         xRACE = replace(xRACE, xRACE == 7 , 'Multiracial'),
+         xRACE = replace(xRACE, xRACE == 8 , 'Hispanic'),
+         ASTHNOW = replace(ASTHNOW, ASTHNOW == 1, 'Still has asthma'),
+         ASTHNOW = replace(ASTHNOW, ASTHNOW == 0, 'Does not have asthma now'),
+         ) %>% 
+  group_by(xRACE) %>% 
+  mutate(percent = COUNT/(sum(COUNT)), 
+	se = sqrt((percent * (1-percent))/COUNT)
+  ) %>% 
+  mutate(percent = round(percent*100,2),
+            se = round(se*100,2)
+  )
+ggplot(data = race_asth,aes(x = ASTHNOW, y = percent, fill = xRACE)) +
+  geom_bar(position = 'dodge', stat = 'identity') +
+	geom_errorbar(aes(ymin =(percent)-(se), 
+	ymax =(percent)+(se)), 
+	width=.05, position=position_dodge(.9))
+
+smoke_100_now <- df3 %>% 
+  group_by(SMOKE100, ASTHNOW) %>% 
+  count() %>% 
+  transmute(COUNT = n) %>% 
+  mutate(
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 1, 'Still has asthma'),
+    ASTHNOW = replace(ASTHNOW, ASTHNOW == 0, 'Does not have asthma now'),
+    SMOKE100 = replace(SMOKE100, SMOKE100 == 1, 'Smoke at least 100 cigarettes'),
+    SMOKE100 = replace(SMOKE100, SMOKE100 == 0, 'Has not smoked more than 100 cigarettes')
+  ) %>% 
+  group_by(SMOKE100)%>% 
+  mutate(percent = COUNT/(sum(COUNT)), 
+	se = sqrt((percent * (1-percent))/COUNT)
+  ) %>% 
+  mutate(percent = round(percent*100,2),
+            se = round(se*100,2)
+  )
+ggplot(data = smoke_100_now,aes(x = ASTHNOW, y = percent, fill = SMOKE100)) +
+  geom_bar(position = 'dodge', stat = 'identity') +
+	geom_errorbar(aes(ymin =(percent)-(se), 
+	ymax =(percent)+(se)), 
+	width=.05, position=position_dodge(.9))
+#Even though I am using only categorical variable I am just going to show what I would've done if I have been using continuous variables.
+summary(df3)
+cor(df3)
+```
+
+#Q14
+```{r}
+best <- glm(ASTHNOW ~ SEX + SMOKE100 + xRACE, binomial(), df3)
+AIC(glm(ASTHNOW ~ SMOKE100 + SEX, binomial(), df3))
+AIC(glm(ASTHNOW ~ SMOKE100, binomial(), df3))
+AIC(glm(ASTHNOW ~ xRACE, binomial(), df3))
+AIC(glm(ASTHNOW ~ SEX, binomial(), df3))
+#Looking at the AIC'S the best model is all three preditors
+summary(best)
+```
+
